@@ -1,0 +1,17 @@
+# SPDX-FileCopyrightText: 2026 Farhan Kurnia Pratama
+#
+# SPDX-License-Identifier: MIT OR Apache-2.0
+
+[package]
+name = "mdrs"
+version = "0.0.0"
+edition = "2024"
+description = "MDRS (Markdown Rich Syntax): a drop-in superset of Markdown"
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+authors = ["Farhan Kurnia Pratama <farhnkrnapratma@gmail.com>"]
+keywords = ["markdown", "commonmark", "gfm", "parser", "directives"]
+categories = ["parser-implementations", "text-processing"]
+include = ["src/**/*.rs", "README.md", "LICENSE-MIT", "LICENSE-APACHE"]
+
+[dependencies]

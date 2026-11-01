@@ -1,0 +1,39 @@
+{
+    "name": "@mdrs/core",
+    "version": "0.0.0",
+    "description": "MDRS (Markdown Rich Syntax): a drop-in superset of Markdown",
+    "license": "MIT OR Apache-2.0",
+    "author": "Farhan Kurnia Pratama <farhnkrnapratma@gmail.com>",
+    "type": "module",
+    "main": "./index.js",
+    "types": "./index.d.ts",
+    "exports": {
+        ".": {
+            "types": "./index.d.ts",
+            "default": "./index.js"
+        }
+    },
+    "files": [
+        "index.js",
+        "index.d.ts",
+        "README.md",
+        "LICENSE-MIT",
+        "LICENSE-APACHE"
+    ],
+    "keywords": [
+        "markdown",
+        "commonmark",
+        "gfm",
+        "parser",
+        "directives",
+        "mdrs"
+    ],
+    "sideEffects": false,
+    "publishConfig": {
+        "access": "public"
+    },
+    "devDependencies": {
+        "@commitlint/cli": "^21.2.4",
+        "@commitlint/config-conventional": "^21.2.4"
+    }
+}
