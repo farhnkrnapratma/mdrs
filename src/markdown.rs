@@ -320,23 +320,29 @@ pub(crate) fn resolve_conditionals(
                 let current = lines[index].trim();
                 if current.starts_with(":::if ") {
                     depth += 1;
-                    if let Some((_, body)) = branches.last_mut() {
-                        body.push(lines[index]);
-                    }
+                    branches
+                        .last_mut()
+                        .expect("a branch is open")
+                        .1
+                        .push(lines[index]);
                 } else if current == ":::endif" {
                     depth -= 1;
                     if depth == 0 {
                         break;
                     }
-                    if let Some((_, body)) = branches.last_mut() {
-                        body.push(lines[index]);
-                    }
+                    branches
+                        .last_mut()
+                        .expect("a branch is open")
+                        .1
+                        .push(lines[index]);
                 } else if depth == 1 && current == ":::else" {
                     branches.push((None, Vec::new()));
                 } else {
-                    if let Some((_, body)) = branches.last_mut() {
-                        body.push(lines[index]);
-                    }
+                    branches
+                        .last_mut()
+                        .expect("a branch is open")
+                        .1
+                        .push(lines[index]);
                 }
                 index += 1;
             }
@@ -602,43 +608,14 @@ fn restore_task_states(html: &str) -> String {
                 });
         }
         if let Some(status) = status {
-            let (state, label, icon) = match status {
-                'x' => (
-                    "done",
-                    "Done",
-                    r#"<rect width="18" height="18" x="3" y="3" rx="2"/><path d="m9 12 2 2 4-4"/>"#,
-                ),
-                '*' => (
-                    "in-progress",
-                    "In progress",
-                    r#"<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M12 8v8"/><path d="m8.5 14 7-4"/><path d="m8.5 10 7 4"/>"#,
-                ),
-                '/' => (
-                    "failed",
-                    "Failed",
-                    r#"<rect width="18" height="18" x="3" y="3" rx="2"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/>"#,
-                ),
-                '-' => (
-                    "skipped",
-                    "Skipped",
-                    r#"<rect width="18" height="18" x="3" y="3" rx="2"/><line x1="8" x2="16" y1="12" y2="12"/>"#,
-                ),
-                '!' => (
-                    "important",
-                    "Important",
-                    r#"<rect width="18" height="18" x="3" y="3" rx="2"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/>"#,
-                ),
-                '?' => (
-                    "question",
-                    "Question",
-                    r#"<rect width="18" height="18" x="3" y="3" rx="2"/><rect width="8" height="8" x="8" y="8" rx="1"/>"#,
-                ),
-                _ => (
+            let (state, label, icon) = states.iter().find(|(marker, ..)| *marker == status).map_or(
+                (
                     "todo",
                     "To do",
                     r#"<rect width="18" height="18" x="3" y="3" rx="2"/>"#,
                 ),
-            };
+                |(_, state, label, icon)| (*state, *label, *icon),
+            );
             body = body.trim().to_owned();
             opening = r#"<li class="mdrs-list-item mdrs-task mdrs-task--"#.to_owned();
             opening.push_str(state);
@@ -1004,5 +981,190 @@ mod tests {
             resolve_defines(source).unwrap(),
             "\\${name}\n\n```md\n${name}\n```"
         );
+    }
+
+    fn scope() -> crate::define::Scope {
+        crate::define::Scope::default()
+    }
+
+    #[test]
+    fn rejects_malformed_define_blocks() {
+        assert!(resolve_defines(":::define\nbad name: 1\n:::").is_err());
+        assert!(resolve_defines(":::define\nno colon here\n:::").is_err());
+        assert!(matches!(
+            resolve_defines(":::define\nname: Ada"),
+            Err(RenderError::UnclosedDefineBlock)
+        ));
+        assert_eq!(resolve_defines("").unwrap(), "");
+        assert_eq!(resolve_defines(":::define\n\n:::\n").unwrap(), "");
+    }
+
+    #[test]
+    fn parses_quoted_and_empty_scalars() {
+        let source = ":::define\na: 'it''s'\nb: \"x\\ny\\rz\\tw\\q\\\\\"\nc: \"ab\\\"\nd:\ne: # note\nf: \"tail\\\n:::\n\n${a}|${b}|${c}|${d}|${e}|${f}";
+        assert_eq!(
+            resolve_defines(source).unwrap(),
+            "it's|x\ny\rz\twq\\|ab\\|||\"tail\\"
+        );
+    }
+
+    #[test]
+    fn keeps_unmatched_backtick_runs_and_bad_names() {
+        let source = ":::define\nname: Ada\n:::\n\n`a ``b` ${name} ${not valid}";
+        assert_eq!(resolve_defines(source).unwrap(), "`a ``b` Ada ${not valid}");
+        let source = ":::define\nname: Ada\n:::\n\n`` `x` `` ${name}";
+        assert_eq!(resolve_defines(source).unwrap(), "`` `x` `` Ada");
+        assert_eq!(
+            resolve_defines("${not valid} ${name").unwrap(),
+            "${not valid} ${name"
+        );
+    }
+
+    #[test]
+    fn resolves_block_conditionals() {
+        let data = serde_json::json!({"flag": true});
+        let source = ":::if flag\nyes\n:::else\nno\n:::endif\n";
+        assert_eq!(
+            resolve_conditionals(source, &scope(), &data).unwrap(),
+            "yes\n"
+        );
+        let source = ":::if !flag\nyes\n:::else\nno\n:::endif";
+        assert_eq!(resolve_conditionals(source, &scope(), &data).unwrap(), "no");
+        let source = ":::if !flag\nyes\n:::endif\nafter";
+        assert_eq!(
+            resolve_conditionals(source, &scope(), &data).unwrap(),
+            "\nafter".trim_start_matches('\n')
+        );
+        let source =
+            ":::if flag\nouter\n:::if !flag\ninner\n:::else\nelse-inner\n:::endif\n:::endif";
+        assert_eq!(
+            resolve_conditionals(source, &scope(), &data).unwrap(),
+            "outer\n:::if !flag\ninner\n:::else\nelse-inner\n:::endif"
+        );
+        assert!(resolve_conditionals(":::if flag\nopen", &scope(), &data).is_err());
+        assert_eq!(
+            resolve_conditionals(
+                ":::if flag\nyes\n:::endif\n:::else\n:::endif\nz",
+                &scope(),
+                &data
+            )
+            .unwrap(),
+            "yes\nz"
+        );
+    }
+
+    #[test]
+    fn resolves_inline_conditionals() {
+        let data = serde_json::json!({"flag": true});
+        assert_eq!(
+            resolve_conditionals("a ${if flag}b${else}c${endif} d", &scope(), &data).unwrap(),
+            "a b d"
+        );
+        assert_eq!(
+            resolve_conditionals("a ${if !flag}b${endif} d", &scope(), &data).unwrap(),
+            "a  d"
+        );
+        assert_eq!(
+            resolve_conditionals("a ${if flag", &scope(), &data).unwrap(),
+            "a ${if flag"
+        );
+        assert_eq!(
+            resolve_conditionals("a ${if flag}b", &scope(), &data).unwrap(),
+            "a ${if flag}b"
+        );
+    }
+
+    #[test]
+    fn rejects_math_output_over_the_size_limit_in_blocks() {
+        let html = "<div class=\"mdrs-math mdrs-math--block\">x^2</div>".repeat(10_000);
+        assert!(render_math(&html).is_err());
+    }
+
+    #[test]
+    fn leaves_unclosed_and_invalid_math_untouched() {
+        let html = "<span class=\"math math-inline\">x^2";
+        assert_eq!(render_math(html).unwrap(), html);
+        let html = "<span class=\"math math-inline\">\\undefinedcommand</span>";
+        assert_eq!(render_math(html).unwrap(), html);
+    }
+
+    #[test]
+    fn restores_every_task_state() {
+        let html = "<ul><li><input type=\"checkbox\" checked disabled> done</li>\
+<li><input type=\"checkbox\" disabled> todo</li>\
+<li>[*] going</li><li>[/] failed</li><li>[-] skipped</li><li>[!] important</li><li>[?] question</li>\
+<li>[x] ticked</li><li><p>plain</p><ul><li>[x] nested</li></ul></li><li>text [x] late</li></ul>";
+        let output = restore_task_states(html);
+        for state in [
+            "done",
+            "todo",
+            "in-progress",
+            "failed",
+            "skipped",
+            "important",
+            "question",
+        ] {
+            assert!(output.contains(&format!("mdrs-task--{state}")), "{state}");
+        }
+        assert_eq!(output.matches("mdrs-task--done").count(), 3);
+        assert!(output.contains("text [x] late"));
+    }
+
+    #[test]
+    fn tolerates_truncated_lists() {
+        assert_eq!(restore_task_states("<li"), "<li");
+        assert_eq!(restore_task_states("<li>open"), "<li>open");
+        assert_eq!(restore_task_states("<li>open<"), "<li>open<");
+        assert_eq!(matching_list_item_end("<li>open<", 4), None);
+    }
+
+    #[test]
+    fn restores_diagram_and_chart_blocks() {
+        let html = "<pre><code class=\"language-mermaid\">a --&gt; b</code></pre>\
+<pre><code class=\"language-chart\">{&quot;a&quot;: 1}</code></pre>";
+        let output = restore_extensions(html).unwrap();
+        assert!(output.contains("data-mdrs-source=\"a%20--%3E%20b\""));
+        assert!(output.contains("data-mdrs-chart="));
+        let open = "<pre><code class=\"language-mermaid\">a";
+        assert_eq!(restore_code_block(open, "mermaid", "mdrs-mermaid"), open);
+        assert_eq!(restore_extensions("<p>plain</p>").unwrap(), "<p>plain</p>");
+    }
+
+    #[test]
+    fn preprocesses_extension_blocks() {
+        let source = ":::math\nx<y\n:::\n:::embed url=\"https://e.test/?a=1&b=2\"\n:::references\n[1]: x\n:::\n::::verbatim\n:::\n::::\n:::verbatim\n**raw**\n:::\ntail";
+        let output = preprocess_extensions(source);
+        assert!(output.contains("x&lt;y"));
+        assert!(output.contains("data-mdrs-embed-url=\"https://e.test/?a=1&amp;b=2\""));
+        assert!(output.contains("REFERENCESPLACEMENT"));
+        assert!(output.contains("<pre class=\"mdrs-verbatim\"><code>:::</code></pre>"));
+        assert!(output.contains("**raw**"));
+        assert!(preprocess_extensions(":::embed nothing").contains("data-mdrs-embed-url=\"\""));
+    }
+
+    #[test]
+    fn decorates_links_in_every_shape() {
+        let options = ResolvedOptions::new(&RenderOptions {
+            internal_origins: vec!["https://own.test".to_owned(), "not a url".to_owned()],
+        });
+        let html = "<a href=\"https://x.test/?a=1&amp;b=2\" class=\"c\">x</a>\
+<a href=\"https://x.test/\" class=\"mdrs-external-link\" target=\"_self\" rel=\"me\">y</a>\
+<a href=\"https://own.test/\">own</a><a href=\"/rel\">rel</a><a name=\"n\">anchor</a>";
+        let output = add_external_link_attributes(html, &options);
+        assert!(output.contains("class=\"c mdrs-external-link\""));
+        assert_eq!(output.matches("mdrs-external-link").count(), 2);
+        assert!(output.contains("<a href=\"https://own.test/\">"));
+        let open = "<a href=\"https://x.test/\" title=\"x";
+        assert_eq!(add_external_link_attributes(open, &options), open);
+        assert!(
+            decorate_external_link("<a href=\"https://x.test/\" class=\"a").starts_with("<a href")
+        );
+        assert!(!decorate_external_link("<a href=\"https://x.test/\"").ends_with('>'));
+    }
+
+    #[test]
+    fn marks_references_headings() {
+        assert_eq!(mark_references("<p>x</p>"), "<p>x</p>");
+        assert!(mark_references("<h2>References</h2>").contains("mdrs-references"));
     }
 }

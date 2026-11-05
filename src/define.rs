@@ -293,28 +293,21 @@ impl<'a> Parser<'a> {
     fn relational(&mut self) -> Result<Value, String> {
         let mut left = self.additive()?;
         loop {
-            let op = if self.take(TokenKind::Gt) {
-                Some(TokenKind::Gt)
+            let compare: fn(f64, f64) -> bool = if self.take(TokenKind::Gt) {
+                |a, b| a > b
             } else if self.take(TokenKind::Lt) {
-                Some(TokenKind::Lt)
+                |a, b| a < b
             } else if self.take(TokenKind::Gte) {
-                Some(TokenKind::Gte)
+                |a, b| a >= b
             } else if self.take(TokenKind::Lte) {
-                Some(TokenKind::Lte)
+                |a, b| a <= b
             } else {
-                None
+                break;
             };
-            let Some(op) = op else { break };
             let right = self.additive()?;
             let a = left.number_value()?;
             let b = right.number_value()?;
-            left = Value::Bool(match op {
-                TokenKind::Gt => a > b,
-                TokenKind::Lt => a < b,
-                TokenKind::Gte => a >= b,
-                TokenKind::Lte => a <= b,
-                _ => unreachable!(),
-            });
+            left = Value::Bool(compare(a, b));
         }
         Ok(left)
     }
@@ -350,25 +343,19 @@ impl<'a> Parser<'a> {
     fn multiplicative(&mut self) -> Result<Value, String> {
         let mut left = self.unary()?;
         loop {
-            let op = if self.take(TokenKind::Star) {
-                Some(TokenKind::Star)
+            let apply: fn(f64, f64) -> f64 = if self.take(TokenKind::Star) {
+                |a, b| a * b
             } else if self.take(TokenKind::Slash) {
-                Some(TokenKind::Slash)
+                |a, b| a / b
             } else if self.take(TokenKind::Percent) {
-                Some(TokenKind::Percent)
+                |a, b| a % b
             } else {
-                None
+                break;
             };
-            let Some(op) = op else { break };
             let right = self.unary()?;
             let a = left.number_value()?;
             let b = right.number_value()?;
-            left = number(match op {
-                TokenKind::Star => a * b,
-                TokenKind::Slash => a / b,
-                TokenKind::Percent => a % b,
-                _ => unreachable!(),
-            });
+            left = number(apply(a, b));
         }
         Ok(left)
     }
@@ -388,11 +375,7 @@ impl<'a> Parser<'a> {
         match token.kind {
             TokenKind::Number => {
                 self.position += 1;
-                token
-                    .text
-                    .parse::<f64>()
-                    .map(number)
-                    .map_err(|_| format!("invalid number '{}'", token.text))
+                Ok(token.text.parse::<f64>().map_or(Value::Null, number))
             }
             TokenKind::String => {
                 self.position += 1;
@@ -495,16 +478,14 @@ fn number(value: f64) -> Value {
 fn display(value: &Value) -> String {
     match value {
         Value::String(value) => value.clone(),
-        Value::Number(value) => value.as_f64().map_or_else(
-            || value.to_string(),
-            |number| {
-                if number.fract() == 0.0 {
-                    format!("{}", number as i64)
-                } else {
-                    number.to_string()
-                }
-            },
-        ),
+        Value::Number(value) => {
+            let number = value.as_f64().unwrap_or(f64::NAN);
+            if number.fract() == 0.0 {
+                format!("{}", number as i64)
+            } else {
+                number.to_string()
+            }
+        }
         Value::Bool(value) => value.to_string(),
         Value::Null => String::new(),
         Value::Array(_) | Value::Object(_) => value.to_string(),
@@ -530,7 +511,7 @@ impl ValueExt for Value {
 
     fn number_value(&self) -> Result<f64, String> {
         match self {
-            Value::Number(value) => value.as_f64().ok_or_else(|| "invalid number".to_owned()),
+            Value::Number(value) => Ok(value.as_f64().unwrap_or(f64::NAN)),
             _ => Err(format!("expected number, got {}", display(self))),
         }
     }
@@ -758,4 +739,206 @@ fn interpolate_line(line: &str, scope: &Scope, data: &Value) -> Result<String, R
     }
     output.push_str(rest);
     Ok(output)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    fn data() -> Value {
+        json!({
+            "a": {"b": [10, 20, 30], "s": "text", "n": null, "z": 0, "e": "", "l": [], "o": {}},
+            "f": 1.5,
+            "n": null
+        })
+    }
+
+    fn scope() -> Scope {
+        let mut scope = Scope::new();
+        scope.insert("x".to_owned(), json!(7));
+        scope
+    }
+
+    fn run(expression: &str) -> Result<Value, String> {
+        eval(expression, &scope(), &data(), false)
+    }
+
+    #[test]
+    fn evaluates_operators_and_literals() {
+        let cases = [
+            ("1 + 2", json!(3.0)),
+            ("'a' + 1", json!("a1")),
+            ("1 + 'a'", json!("1a")),
+            ("5 - 3", json!(2.0)),
+            ("2 * 3", json!(6.0)),
+            ("7 / 2", json!(3.5)),
+            ("7 % 4", json!(3.0)),
+            ("-3", json!(-3.0)),
+            ("!0", json!(true)),
+            ("!'x'", json!(false)),
+            ("1 > 0", json!(true)),
+            ("1 < 0", json!(false)),
+            ("1 >= 1", json!(true)),
+            ("1 <= 0", json!(false)),
+            ("1 == 1", json!(true)),
+            ("1 != 1", json!(false)),
+            ("true && false", json!(false)),
+            ("false || true", json!(true)),
+            ("true ? 1 : 2", json!(1.0)),
+            ("false ? 1 : 2", json!(2.0)),
+            ("(1 + 2) * 3", json!(9.0)),
+            ("[1, 2]", json!([1.0, 2.0])),
+            ("[1, 2,]", json!([1.0, 2.0])),
+            ("{a: 1, b: 'two'}", json!({"a": 1.0, "b": "two"})),
+            ("{a: 1,}", json!({"a": 1.0})),
+            (".5 + 1.", json!(1.5)),
+            ("1 // note", json!(1.0)),
+            ("'a\\nb\\rc\\td\\qe'", json!("a\nb\rc\tdqe")),
+            ("\"dq\"", json!("dq")),
+            ("'${1 + 1}!'", json!("2!")),
+            ("0 / 0", Value::Null),
+            ("x", json!(7)),
+            ("a.b.length", json!(3.0)),
+            ("a.b[0]", json!(10)),
+            ("a['b'][1]", json!(20)),
+            ("a.b[1.0]", json!(20)),
+            ("a.s.length", Value::Null),
+        ];
+        for (expression, expected) in cases {
+            let outcome = run(expression);
+            if expression == "a.s.length" {
+                assert!(outcome.is_err(), "{expression}");
+            } else {
+                assert_eq!(outcome, Ok(expected), "{expression}");
+            }
+        }
+    }
+
+    #[test]
+    fn evaluates_truthiness_of_every_value_kind() {
+        for (expression, expected) in [
+            ("!n", true),
+            ("!a.z", true),
+            ("!a.e", true),
+            ("!a.l", true),
+            ("!a.o", true),
+            ("!a.b", false),
+            ("!a.s", false),
+            ("!f", false),
+        ] {
+            assert_eq!(run(expression), Ok(json!(expected)), "{expression}");
+        }
+    }
+
+    #[test]
+    fn rejects_malformed_expressions() {
+        for expression in [
+            "'abc",
+            "@",
+            "1 +",
+            "1 2",
+            "this.x",
+            "missing",
+            "a.zzz",
+            "a.b[9]",
+            "a.b[true]",
+            "1 > 'a'",
+            "(1",
+            "[1 2]",
+            "{a 1}",
+            "{1: 2}",
+            "'${1'",
+            "1 ? 2",
+            "- 'a'",
+            "7 * 'a'",
+        ] {
+            assert!(run(expression).is_err(), "{expression}");
+        }
+    }
+
+    #[test]
+    fn resolves_this_only_inside_definitions() {
+        let outcome = eval("this.x + 1", &scope(), &data(), true);
+        assert_eq!(outcome, Ok(json!(8.0)));
+        assert!(eval("this", &scope(), &data(), true).is_err());
+        assert!(eval("this.y", &scope(), &data(), true).is_err());
+    }
+
+    #[test]
+    fn resolves_an_empty_source_to_nothing() {
+        assert_eq!(resolve("", &json!({})).unwrap(), "");
+    }
+
+    #[test]
+    fn displays_values_for_interpolation() {
+        assert_eq!(value_display(&json!(2.0)), "2");
+        assert_eq!(value_display(&json!(2.5)), "2.5");
+        assert_eq!(value_display(&json!(true)), "true");
+        assert_eq!(value_display(&Value::Null), "");
+        assert_eq!(value_display(&json!([1, 2])), "[1,2]");
+        assert_eq!(value_display(&json!("s")), "s");
+        assert!(value_as_bool(&json!(1)));
+    }
+
+    #[test]
+    fn resolves_definitions_in_dependency_order() {
+        let source = ":::define\nb: a + 1\na: 1\n:::\n\nvalue ${b}\n```\n${raw}\n```\nescaped \\${b} and ${if b}${else}${endif}";
+        let (rendered, scope) = resolve_with_scope(source, &json!({})).unwrap();
+        assert_eq!(scope.get("b"), Some(&json!(2.0)));
+        assert!(rendered.contains("value 2"));
+        assert!(rendered.contains("${raw}"));
+        assert!(rendered.contains("escaped \\${b}"));
+        assert!(rendered.contains("${if b}${else}${endif}"));
+        assert_eq!(resolve(source, &json!({})).unwrap(), rendered);
+    }
+
+    #[test]
+    fn reports_definition_failures() {
+        assert_eq!(
+            resolve(":::define\na: 1", &json!({})),
+            Err(RenderError::UnclosedDefineBlock)
+        );
+        assert_eq!(
+            resolve(":::define\nnot a pair\n:::", &json!({})),
+            Err(RenderError::UnsupportedDefineValue {
+                name: String::new(),
+                expression: "not a pair".to_owned()
+            })
+        );
+        assert!(matches!(
+            resolve(":::define\na: b\nb: a\n:::", &json!({})),
+            Err(RenderError::UnsupportedDefineValue { .. })
+        ));
+        assert!(matches!(
+            resolve(":::define\na: 1 +\n:::", &json!({})),
+            Err(RenderError::UnsupportedDefineValue { name, .. }) if name == "a"
+        ));
+        assert!(matches!(
+            resolve("${missing}", &json!({})),
+            Err(RenderError::UndefinedVariable(_))
+        ));
+        assert!(matches!(
+            resolve("${unterminated", &json!({})),
+            Err(RenderError::UndefinedVariable(_))
+        ));
+    }
+
+    #[test]
+    fn keeps_blank_lines_and_fences_around_definitions() {
+        let source =
+            "~~~\n:::define\n~~~\n```` \n```\n````\n:::define\n\nname: 'x'\n\n:::\n\ntext ${name}";
+        let rendered = resolve(source, &json!({})).unwrap();
+        assert!(rendered.contains(":::define"));
+        assert!(rendered.ends_with("text x"));
+    }
+
+    #[test]
+    fn limits_the_size_of_a_single_definition() {
+        let data = json!({"big": "x".repeat(crate::MAX_RENDERED_OUTPUT_LENGTH + 1)});
+        assert!(matches!(
+            resolve(":::define\nv: big\n:::\nx", &data),
+            Err(RenderError::DocumentTooLarge { .. })
+        ));
+    }
 }

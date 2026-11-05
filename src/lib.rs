@@ -434,4 +434,66 @@ ${literal}
         assert_eq!(page.headings.len(), 1);
         assert_eq!(page.headings[0].text, "Getting Started");
     }
+
+    #[test]
+    fn describes_every_error() {
+        assert_eq!(
+            RenderError::DocumentTooLarge {
+                actual: 2,
+                maximum: 1
+            }
+            .to_string(),
+            "Markdown document is too large (2 > 1)."
+        );
+        assert_eq!(
+            RenderError::UnclosedDefineBlock.to_string(),
+            "The :::define block is not closed."
+        );
+        assert_eq!(
+            RenderError::UnsupportedDefineValue {
+                name: "a".to_owned(),
+                expression: "b".to_owned()
+            }
+            .to_string(),
+            "The value for 'a' requires a live-data resolver or expression evaluator: b"
+        );
+        assert_eq!(
+            RenderError::UndefinedVariable("v".to_owned()).to_string(),
+            "Undefined MDRS variable 'v'."
+        );
+        assert_eq!(
+            RenderError::InvalidData("bad".to_owned()).to_string(),
+            "Invalid MDRS data: bad"
+        );
+    }
+
+    #[test]
+    fn resolves_definitions_without_and_with_data() {
+        let source = ":::define\nname: 'MDRS'\ncount: api.n\n:::\n\n${name} ${count}";
+        assert_eq!(resolve_defines(source).unwrap(), "MDRS api.n");
+        assert!(resolve_defines(":::define\nn: api.v1.x\n:::\n\n${n}").is_err());
+        assert_eq!(
+            resolve_defines(":::define\nname: 'MDRS'\n:::\n\nhi ${name}").unwrap(),
+            "hi MDRS"
+        );
+        let data = serde_json::json!({"api": {"n": 3}});
+        assert_eq!(resolve_defines_with_data(source, &data).unwrap(), "MDRS 3");
+        let oversized = "x".repeat(MAX_DOCUMENT_LENGTH + 1);
+        assert!(resolve_defines(&oversized).is_err());
+        assert!(resolve_defines_with_data(&oversized, &data).is_err());
+    }
+
+    #[test]
+    fn prepares_pages_with_data() {
+        let data = serde_json::json!({"api": {"title": "Data page"}});
+        let page = prepare_markdown_page_with_data(
+            ":::define\nt: api.title\n:::\n\n## ${t}\n\n[go](#data-page)",
+            &data,
+            &RenderOptions::default(),
+        )
+        .unwrap();
+        assert!(page.html.contains("id=\"mdrs-data-page\""));
+        assert!(page.html.contains("href=\"#mdrs-data-page\""));
+        assert_eq!(page.headings[0].text, "Data page");
+    }
 }

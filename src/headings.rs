@@ -368,4 +368,100 @@ mod tests {
         assert_eq!(headings.len(), 1);
         assert_eq!(headings[0].id, "mdrs-visible");
     }
+
+    #[test]
+    fn leaves_unclosed_headings_untouched() {
+        assert_eq!(inject_heading_ids("<p>a</p><h2>open"), "<p>a</p><h2>open");
+        assert!(extract_headings("<h2 id=\"mdrs-a\">open").is_empty());
+    }
+
+    #[test]
+    fn keeps_existing_ids_and_numbers_fallback_slugs() {
+        let output = inject_heading_ids(
+            "<h2 id=\"custom\">A</h2><h2>!!!</h2><h3></h3><h2>A  - b -- c</h2><h2>A b c</h2>",
+        );
+        assert!(output.contains("<h2 id=\"custom\">A</h2>"));
+        assert!(output.contains("id=\"mdrs-heading-0\""));
+        assert!(output.contains("id=\"mdrs-heading-1\""));
+        assert!(output.contains("id=\"mdrs-a-b-c\""));
+        assert!(output.contains("id=\"mdrs-a-b-c-1\""));
+    }
+
+    #[test]
+    fn skips_lookalike_heading_tags() {
+        let html = "<hr><h7>x</h7><h2x>y</h2x><h";
+        assert_eq!(inject_heading_ids(html), html);
+        assert!(extract_headings(html).is_empty());
+        assert_eq!(find_heading("<h", 0), None);
+    }
+
+    #[test]
+    fn extracts_only_visible_identified_headings() {
+        let html = concat!(
+            "<h2 id=\"mdrs-a\" class=\"x mdrs-sr-only\">A</h2>",
+            "<h2 id=\"mdrs-b\" aria-hidden=\"true\">B</h2>",
+            "<h2 id=\"mdrs-c\" aria-hidden=\"false\">C</h2>",
+            "<h3>no id</h3>",
+            "<h4 id=\"mdrs-d\">D &amp; <b>e</b></h4>",
+        );
+        let headings = extract_headings(html);
+        assert_eq!(
+            headings,
+            vec![
+                HeadingItem {
+                    id: "mdrs-c".to_owned(),
+                    text: "C".to_owned(),
+                    level: 2
+                },
+                HeadingItem {
+                    id: "mdrs-d".to_owned(),
+                    text: "D & e".to_owned(),
+                    level: 4
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn rewrites_only_resolvable_hash_links() {
+        let html = concat!(
+            "<h2 id=\"mdrs-real\">R</h2>",
+            "<a href=\"#real\">1</a>",
+            "<a href=\"#missing\">2</a>",
+            "<a href=\"#mdrs-real\">3</a>",
+            "<a href=\"https://x.example\">4</a>",
+            "<a>5</a>",
+            "<a href=\"#real\""
+        );
+        let output = prefix_hash_links(html);
+        assert!(output.contains("<a href=\"#mdrs-real\">1</a>"));
+        assert!(output.contains("<a href=\"#missing\">2</a>"));
+        assert!(output.contains("<a href=\"#mdrs-real\">3</a>"));
+        assert!(output.contains("<a href=\"https://x.example\">4</a>"));
+        assert!(output.ends_with("<a href=\"#real\""));
+    }
+
+    #[test]
+    fn decodes_the_remaining_entities() {
+        assert_eq!(
+            decode_html_entities(
+                "&quot;&apos;&nbsp;&mdash;&laquo;&raquo;&hellip;&lsquo;&rsquo;&ldquo;&rdquo;"
+            ),
+            "\"'\u{a0}\u{2014}\u{ab}\u{bb}\u{2026}\u{2018}\u{2019}\u{201c}\u{201d}"
+        );
+        assert_eq!(decode_html_entities("&#X41;&#x42;"), "AB");
+        assert_eq!(
+            decode_html_entities("&unknown; &#xZZ; &#1114112; &#"),
+            "&unknown; &#xZZ; &#1114112; &#"
+        );
+    }
+
+    #[test]
+    fn collects_attribute_values_until_an_unterminated_tag() {
+        let values = attribute_values("<p id=\"a\"><i id=\"b\"> <u id=\"c\"", "id");
+        assert!(values.contains("a"));
+        assert!(values.contains("b"));
+        assert!(!values.contains("c"));
+        assert!(attribute_values("text", "id").is_empty());
+    }
 }

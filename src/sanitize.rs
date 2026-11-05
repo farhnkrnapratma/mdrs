@@ -115,11 +115,7 @@ pub(crate) fn has_attribute(tag: &str, name: &str) -> bool {
     let mut in_dq = false;
     let mut in_sq = false;
     let mut i = 0;
-    while i < tag.len() {
-        let c = match tag[i..].chars().next() {
-            Some(c) => c,
-            None => return false,
-        };
+    while let Some(c) = tag[i..].chars().next() {
         match c {
             '"' if !in_sq => in_dq = !in_dq,
             '\'' if !in_dq => in_sq = !in_sq,
@@ -266,5 +262,35 @@ mod tests {
         let html = filter_tag_classes(r#"<div class="arbitrary">text"#);
         assert!(!html.contains("class="));
         assert!(!html.contains("  "));
+    }
+
+    #[test]
+    fn escapes_every_special_character() {
+        assert_eq!(escape_html("&<>\"'x"), "&amp;&lt;&gt;&quot;&#39;x");
+    }
+
+    #[test]
+    fn keeps_unterminated_tags_when_filtering_classes() {
+        assert_eq!(filter_classes("a <div class=\"mdrs"), "a <div class=\"mdrs");
+        assert_eq!(filter_tag_classes("<div class=\"mdrs"), "<div class=\"mdrs");
+        assert_eq!(filter_classes("a < b"), "a < b");
+    }
+
+    #[test]
+    fn finds_attributes_outside_quoted_values() {
+        assert!(has_attribute("<p hidden>", "hidden"));
+        assert!(has_attribute("<p title='a' HIDDEN=\"\">", "hidden"));
+        assert!(!has_attribute("<p title='a hidden'>", "hidden"));
+        assert!(!has_attribute("<p hidden-x>", "hidden"));
+        assert!(!has_attribute("<p title=\"it's\" data-hidden>", "hidden"));
+        assert_eq!(
+            find_attr_value_start("<a 'x' href=\"y\">", "href"),
+            Some(13)
+        );
+        assert_eq!(
+            find_attr_value_start("<a title='href=\"y\"'>", "href"),
+            None
+        );
+        assert_eq!(tag_close_offset("<a title=\"x>"), None);
     }
 }

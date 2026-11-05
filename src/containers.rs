@@ -441,4 +441,121 @@ mod tests {
         assert!(output.contains("<code>let x = 1;</code>"));
         assert!(output.contains("const x = 1;"));
     }
+
+    #[test]
+    fn parses_attribute_forms() {
+        let attributes = parse_attributes(
+            "  bare label = \"two words\" single='x y' loose=value =stray key=\"unterminated",
+        );
+        let pairs: Vec<(&str, &str)> = attributes
+            .iter()
+            .map(|(key, value)| (key.as_str(), value.as_str()))
+            .collect();
+        assert_eq!(
+            pairs,
+            [
+                ("bare", ""),
+                ("label", "two words"),
+                ("single", "x y"),
+                ("loose", "value"),
+                ("stray", ""),
+                ("key", "unterminated")
+            ]
+        );
+        assert_eq!(attribute(&attributes, "label"), Some("two words"));
+        assert_eq!(attribute(&attributes, "missing"), None);
+    }
+
+    #[test]
+    fn leaves_unclosed_and_unknown_directives_as_text() {
+        let unclosed = render(":::note\nbody", &default_opts());
+        assert!(unclosed.contains(":::note"));
+        assert!(unclosed.contains("body"));
+        assert!(!unclosed.contains("mdrs-alert"));
+        let unknown = render(":::unknown\nbody\n:::", &default_opts());
+        assert!(!unknown.contains("mdrs-alert"));
+        let bare = render(":::\nbody", &default_opts());
+        assert!(bare.contains("body"));
+    }
+
+    #[test]
+    fn stops_nesting_at_the_depth_limit() {
+        let open = ":::note\n".repeat(MAX_CONTAINER_DEPTH + 2);
+        let close = ":::\n".repeat(MAX_CONTAINER_DEPTH + 2);
+        let output = render(&format!("{open}deep\n{close}"), &default_opts());
+        assert!(output.contains("mdrs-alert--note"));
+        assert!(output.contains(":::note"));
+    }
+
+    #[test]
+    fn renders_steps_callouts_and_every_alert_kind() {
+        let source = ":::steps\n1. one\n:::\n\n:::callout\nplain\n:::\n\n:::callout title=\"T\" icon=\"bad icon\"\nx\n:::\n\n:::tip\na\n:::\n\n:::important\na\n:::\n\n:::warning\na\n:::\n\n:::caution\na\n:::";
+        let output = render(source, &default_opts());
+        assert!(output.contains("mdrs-steps"));
+        assert!(output.contains("<span>Callout</span>"));
+        assert!(output.contains("<span>T</span>"));
+        assert!(!output.contains("bad icon"));
+        for kind in ["tip", "important", "warning", "caution"] {
+            assert!(output.contains(&format!("mdrs-alert--{kind}")), "{kind}");
+        }
+        assert!(output.contains("mdrs-icon-lightbulb"));
+        assert!(output.contains("mdrs-icon-message-square-warning"));
+        assert!(output.contains("mdrs-icon-alert-triangle"));
+        assert!(output.contains("mdrs-icon-circle-alert"));
+    }
+
+    #[test]
+    fn renders_details_without_a_summary() {
+        let output = render(":::details\nx\n:::", &default_opts());
+        assert!(output.contains("<summary>Details</summary>"));
+    }
+
+    #[test]
+    fn renders_snippets_with_keys_icons_and_fenced_content() {
+        let source = ":::snippets key=\"lang\"\nignored before the first tab\n::tab label=\"Rust\" icon=\"rust\"\n```\n::tab label=\"fake\"\n:::\n```\n::tab label=\"Go\"\ngo\n:::";
+        let output = render(source, &default_opts());
+        assert!(output.contains("mdrs-snippets"));
+        assert!(output.contains("data-mdrs-tab-key=\"lang\""));
+        assert!(output.contains("mdrs-icon-rust"));
+        assert!(output.contains("mdrs-snippets-actions"));
+        assert!(output.contains("hidden"));
+        assert!(!output.contains("data-mdrs-tab-label=\"fake\""));
+    }
+
+    #[test]
+    fn rejects_tabs_without_labels_and_keeps_unclosed_tabs_visible() {
+        let unlabeled = render(":::tabs\n::tab\nx\n:::", &default_opts());
+        assert!(unlabeled.contains("Tabs require at least one ::tab with a label."));
+        let empty = render(":::tabs\n:::", &default_opts());
+        assert!(empty.contains("Tabs require at least one ::tab with a label."));
+        let unclosed = render(":::tabs\n::tab label=\"A\"\nx", &default_opts());
+        assert!(unclosed.contains(":::tabs"));
+        assert!(unclosed.contains("data-mdrs-tab-label=\"A\""));
+        let lookalike = render(":::tabs\n::tabs label=\"A\"\n:::", &default_opts());
+        assert!(lookalike.contains("Tabs require"));
+    }
+
+    #[test]
+    fn ignores_fences_and_text_before_the_first_tab() {
+        let output = render(
+            ":::tabs\n```\nskipped\n```\n::tab label=\"A\"\nx\n:::",
+            &default_opts(),
+        );
+        assert!(output.contains("data-mdrs-tab-label=\"A\""));
+        assert!(!output.contains("skipped"));
+        let unclosed = render(":::tabs\nno tab here", &default_opts());
+        assert!(unclosed.contains("Tabs require"));
+    }
+
+    #[test]
+    fn closes_a_fence_before_resuming_container_parsing() {
+        let source = "~~~~\n```\n~~~~\n:::note\nafter\n:::";
+        let output = render(source, &default_opts());
+        assert!(output.contains("mdrs-alert--note"));
+        let tabs = render(
+            ":::tabs\n::tab label=\"A\"\n~~~~\n```\n~~~~\nx\n:::",
+            &default_opts(),
+        );
+        assert!(tabs.contains("mdrs-tabs"));
+    }
 }
