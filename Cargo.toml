@@ -1,0 +1,40 @@
+[package]
+name = "mdrs"
+version = "1.0.0-alpha1"
+authors = ["Farhan Kurnia Pratama <farhnkrnapratma@gmail.com>"]
+edition = "2024"
+description = "MDRS (Markdown Rich Syntax): a drop-in superset of Markdown"
+readme = "README.md"
+homepage = "https://fkp.my.id"
+repository = "https://github.com/farhnkrnapratma/mdrs"
+license = "MIT OR Apache-2.0"
+keywords = ["markdown", "commonmark", "gfm", "parser", "directives"]
+categories = ["parser-implementations", "text-processing"]
+include = ["/build.rs", "/src/**/*.rs", "/README.md", "/LICENSE-MIT", "/LICENSE-APACHE"]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[[bench]]
+name = "render"
+harness = false
+
+[dependencies]
+ammonia = "4.2.4"
+katex-rs = "0.3.0"
+napi = { version = "3", optional = true }
+napi-derive = { version = "3", optional = true }
+pulldown-cmark = "0.13.6"
+serde = { version = "1.0.229", features = ["derive"], optional = true }
+serde-wasm-bindgen = { version = "0.6.5", optional = true }
+serde_json = "1.0.145"
+url = "2.5.8"
+wasm-bindgen = { version = "0.2.130", optional = true }
+
+[features]
+default = []
+napi = ["dep:napi", "dep:napi-derive", "dep:napi-build"]
+wasm = ["dep:wasm-bindgen", "dep:serde", "dep:serde-wasm-bindgen"]
+
+[build-dependencies]
+napi-build = { version = "2", optional = true }

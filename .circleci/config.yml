@@ -1,0 +1,272 @@
+version: 2.1
+
+orbs:
+  win: circleci/windows@5.1.1
+
+executors:
+  rust:
+    docker:
+      - image: cimg/rust:1.99.1-node
+    resource_class: medium
+
+commands:
+  setup-bun:
+    steps:
+      - run:
+          name: Install bun
+          command: |
+            curl -fsSL https://bun.sh/install | bash -s "bun-v1.4.4"
+            echo 'export PATH="$HOME/.bun/bin:$PATH"' >> "$BASH_ENV"
+  setup-deny:
+    steps:
+      - run:
+          name: Install cargo-deny
+          command: |
+            curl -fsSL https://github.com/EmbarkStudios/cargo-deny/releases/download/0.20.2/cargo-deny-0.20.2-x86_64-unknown-linux-musl.tar.gz \
+              | tar -xz --strip-components=1 -C "$HOME/.cargo/bin" --wildcards '*/cargo-deny'
+  setup-trufflehog:
+    steps:
+      - run:
+          name: Install trufflehog
+          command: |
+            base=https://github.com/trufflesecurity/trufflehog/releases/download/v3.99.8
+            curl -fsSL -o "$HOME/trufflehog.tar.gz" "$base/trufflehog_3.99.8_linux_amd64.tar.gz"
+            curl -fsSL -o "$HOME/trufflehog.sums" "$base/trufflehog_3.99.8_checksums.txt"
+            (cd "$HOME" && grep ' trufflehog_3.99.8_linux_amd64.tar.gz$' trufflehog.sums | awk '{print $1"  trufflehog.tar.gz"}' | sha256sum -c -)
+            mkdir -p "$HOME/.local/bin"
+            tar -xzf "$HOME/trufflehog.tar.gz" -C "$HOME/.local/bin" trufflehog
+            echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$BASH_ENV"
+  restore-cargo:
+    parameters:
+      scope:
+        type: string
+    steps:
+      - restore_cache:
+          keys:
+            - cargo-v1-<< parameters.scope >>-{{ checksum "Cargo.lock" }}
+            - cargo-v1-<< parameters.scope >>-
+  save-cargo:
+    parameters:
+      scope:
+        type: string
+    steps:
+      - save_cache:
+          key: cargo-v1-<< parameters.scope >>-{{ checksum "Cargo.lock" }}
+          paths:
+            - ~/.cargo/registry
+            - ~/.cargo/git
+            - target
+
+jobs:
+  reuse:
+    docker:
+      - image: cimg/python:3.12
+    steps:
+      - checkout
+      - run: pip install --quiet reuse==6.3.0
+      - run: reuse lint
+
+  lint:
+    executor: rust
+    steps:
+      - checkout
+      - restore-cargo:
+          scope: lint
+      - run: cargo fmt --check
+      - run: cargo clippy --all-targets --all-features --locked -- -D warnings
+      - setup-deny
+      - run: cargo deny check
+      - save-cargo:
+          scope: lint
+
+  test:
+    executor: rust
+    steps:
+      - checkout
+      - restore-cargo:
+          scope: test
+      - setup-bun
+      - run: bun install --frozen-lockfile
+      - run: rustup target add wasm32-unknown-unknown
+      # test:native checks the wasm target with --offline, so fetch every dependency first
+      - run: cargo fetch --locked
+      - run: cargo test --locked
+      - run: bun run test:native
+      - save-cargo:
+          scope: test
+
+  secrets:
+    docker:
+      - image: cimg/python:3.12
+    steps:
+      - checkout
+      - setup-trufflehog
+      - run: if [ "$(git rev-parse --is-shallow-repository)" = true ]; then git fetch --unshallow; fi
+      - run: trufflehog git "file://$PWD" --results=verified --fail --no-update
+
+  commitlint:
+    executor: rust
+    steps:
+      - checkout
+      - setup-bun
+      - run: bun install --frozen-lockfile
+      - run:
+          name: Lint commit messages
+          command: |
+            if [ "$(git rev-parse --is-shallow-repository)" = true ]; then git fetch --unshallow; fi
+            git fetch --quiet origin main:refs/remotes/origin/main
+            if [ "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)" ]; then
+              bunx --bun --no-install commitlint --last
+            else
+              bunx --bun --no-install commitlint --from "$(git merge-base origin/main HEAD)" --to HEAD
+            fi
+
+  # Everything below runs on version tags only (see the release workflow).
+  build-linux:
+    parameters:
+      target:
+        type: string
+    executor: rust
+    steps:
+      - checkout
+      - restore-cargo:
+          scope: release-<< parameters.target >>
+      - setup-bun
+      - run: bun install --frozen-lockfile
+      - run: rustup target add << parameters.target >>
+      - run:
+          name: Install zig and cargo-zigbuild
+          command: |
+            # shortcut: only x86_64-unknown-linux-gnu builds natively, the other linux targets cross-compile with zig
+            if [ "<< parameters.target >>" != "x86_64-unknown-linux-gnu" ]; then
+              curl -fsSL https://ziglang.org/download/0.17.1/zig-x86_64-linux-0.17.1.tar.xz | tar -xJ -C "$HOME"
+              echo 'export PATH="$HOME/zig-x86_64-linux-0.17.1:$PATH"' >> "$BASH_ENV"
+              cargo install cargo-zigbuild --locked --version 0.24.1
+            fi
+      - run:
+          name: Build binding
+          command: |
+            if [ "<< parameters.target >>" = "x86_64-unknown-linux-gnu" ]; then
+              bun run build:release --target << parameters.target >>
+            else
+              bun run build:release --target << parameters.target >> -x
+            fi
+      - run: mkdir -p artifacts/bindings-<< parameters.target >> && mv *.node artifacts/bindings-<< parameters.target >>/
+      - persist_to_workspace:
+          root: .
+          paths:
+            - artifacts
+      - save-cargo:
+          scope: release-<< parameters.target >>
+
+  # Apple silicon is the only macOS hardware CircleCI offers, so x86_64-apple-darwin is cross-compiled here.
+  build-macos:
+    macos:
+      xcode: 26.6
+    resource_class: m4pro.medium
+    steps:
+      - checkout
+      - run:
+          name: Install rust and bun
+          command: |
+            curl -fsSL https://sh.rustup.rs | sh -s -- -y --profile minimal
+            curl -fsSL https://bun.sh/install | bash -s "bun-v1.4.4"
+            echo 'export PATH="$HOME/.cargo/bin:$HOME/.bun/bin:$PATH"' >> "$BASH_ENV"
+      - run: bun install --frozen-lockfile
+      - run: rustup target add x86_64-apple-darwin aarch64-apple-darwin
+      - run:
+          name: Build bindings
+          command: |
+            for target in x86_64-apple-darwin aarch64-apple-darwin; do
+              bun run build:release --target "$target"
+              mkdir -p "artifacts/bindings-$target"
+              mv *.node "artifacts/bindings-$target/"
+            done
+      - persist_to_workspace:
+          root: .
+          paths:
+            - artifacts
+
+  build-windows:
+    executor: win/default
+    steps:
+      - checkout
+      - run:
+          name: Install rust and bun
+          command: |
+            Invoke-WebRequest https://win.rustup.rs/x86_64 -OutFile rustup-init.exe
+            ./rustup-init.exe -y --profile minimal
+            npm install --global bun@1.4.4
+      - run:
+          name: Build bindings
+          command: |
+            $env:PATH = "$env:USERPROFILE\.cargo\bin;$env:PATH"
+            bun install --frozen-lockfile
+            foreach ($target in 'x86_64-pc-windows-msvc', 'aarch64-pc-windows-msvc') {
+              rustup target add $target
+              bun run build:release --target $target
+              New-Item -ItemType Directory -Force "artifacts/bindings-$target" | Out-Null
+              Move-Item *.node "artifacts/bindings-$target/"
+            }
+      - persist_to_workspace:
+          root: .
+          paths:
+            - artifacts
+
+  publish:
+    executor: rust
+    steps:
+      - checkout
+      - attach_workspace:
+          at: .
+      - setup-bun
+      - run: bun install --frozen-lockfile
+      - run: bunx napi create-npm-dirs
+      - run: bunx napi artifacts --output-dir artifacts
+      - run:
+          name: Publish to npm
+          command: |
+            echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > ~/.npmrc
+            case "$CIRCLE_TAG" in *-*) export npm_config_tag=alpha ;; esac
+            bunx napi pre-publish -t npm --no-gh-release
+            npm publish --access public
+
+workflows:
+  ci:
+    jobs:
+      - reuse
+      - lint
+      - test
+      - secrets
+      - commitlint
+
+  release:
+    jobs:
+      - build-linux:
+          name: build-<< matrix.target >>
+          matrix:
+            parameters:
+              target:
+                - x86_64-unknown-linux-gnu
+                - aarch64-unknown-linux-gnu
+                - x86_64-unknown-linux-musl
+                - aarch64-unknown-linux-musl
+          filters: &tags-only
+            tags:
+              only: /^v.*/
+            branches:
+              ignore: /.*/
+      - build-macos:
+          filters: *tags-only
+      - build-windows:
+          filters: *tags-only
+      - publish:
+          context: npm-publish
+          requires:
+            - build-x86_64-unknown-linux-gnu
+            - build-aarch64-unknown-linux-gnu
+            - build-x86_64-unknown-linux-musl
+            - build-aarch64-unknown-linux-musl
+            - build-macos
+            - build-windows
+          filters: *tags-only

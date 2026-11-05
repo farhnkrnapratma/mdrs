@@ -1,0 +1,70 @@
+{
+    "name": "@mdrs/core",
+    "version": "1.0.0-alpha1",
+    "description": "MDRS (Markdown Rich Syntax): a drop-in superset of Markdown",
+    "license": "MIT OR Apache-2.0",
+    "author": "Farhan Kurnia Pratama <farhnkrnapratma@gmail.com>",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/farhnkrnapratma/mdrs.git"
+    },
+    "homepage": "https://github.com/farhnkrnapratma/mdrs#readme",
+    "bugs": {
+        "url": "https://github.com/farhnkrnapratma/mdrs/issues"
+    },
+    "type": "module",
+    "main": "./index.js",
+    "types": "./index.d.ts",
+    "exports": {
+        ".": {
+            "types": "./index.d.ts",
+            "default": "./index.js"
+        }
+    },
+    "files": [
+        "index.js",
+        "index.native.js",
+        "index.d.ts",
+        "index.native.d.ts",
+        "*.node",
+        "README.md",
+        "LICENSE-MIT",
+        "LICENSE-APACHE"
+    ],
+    "keywords": [
+        "markdown",
+        "commonmark",
+        "gfm",
+        "parser",
+        "directives",
+        "mdrs"
+    ],
+    "sideEffects": false,
+    "scripts": {
+        "prepare": "bash .githooks/install.sh",
+        "build": "napi build --platform --features napi --esm --js index.native.js --dts index.native.d.ts",
+        "build:release": "napi build --platform --release --features napi --esm --js index.native.js --dts index.native.d.ts",
+        "test:bindings": "bun scripts/test-bindings.mjs",
+        "test:native": "bun run build:release && bun run test:bindings"
+    },
+    "napi": {
+        "binaryName": "mdrs",
+        "targets": [
+            "x86_64-unknown-linux-gnu",
+            "aarch64-unknown-linux-gnu",
+            "x86_64-unknown-linux-musl",
+            "aarch64-unknown-linux-musl",
+            "x86_64-apple-darwin",
+            "aarch64-apple-darwin",
+            "x86_64-pc-windows-msvc",
+            "aarch64-pc-windows-msvc"
+        ]
+    },
+    "publishConfig": {
+        "access": "public"
+    },
+    "devDependencies": {
+        "@commitlint/cli": "^21.2.4",
+        "@commitlint/config-conventional": "^21.2.4"
+    }
+}
