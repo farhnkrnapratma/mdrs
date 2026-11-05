@@ -105,7 +105,7 @@ jobs:
       - run:
           name: Scan history
           command: |
-            git clone --quiet "$CIRCLE_REPOSITORY_URL" "$HOME/scan"
+            git clone --quiet "https://github.com/farhnkrnapratma/mdrs.git" "$HOME/scan"
             trufflehog git "file://$HOME/scan" --results=verified --fail --no-update
 
   commitlint:
