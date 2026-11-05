@@ -16,6 +16,7 @@ commands:
           name: Install bun
           command: |
             curl -fsSL https://bun.sh/install | bash -s "bun-v1.4.4"
+            ln -sf "$HOME/.bun/bin/bun" "$HOME/.bun/bin/bunx"
             echo 'export PATH="$HOME/.bun/bin:$PATH"' >> "$BASH_ENV"
   setup-deny:
     steps:
@@ -171,6 +172,7 @@ jobs:
           command: |
             curl -fsSL https://sh.rustup.rs | sh -s -- -y --profile minimal
             curl -fsSL https://bun.sh/install | bash -s "bun-v1.4.4"
+            ln -sf "$HOME/.bun/bin/bun" "$HOME/.bun/bin/bunx"
             echo 'export PATH="$HOME/.cargo/bin:$HOME/.bun/bin:$PATH"' >> "$BASH_ENV"
       - run: bun install --frozen-lockfile
       - run: rustup target add x86_64-apple-darwin aarch64-apple-darwin
