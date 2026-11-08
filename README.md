@@ -1,5 +1,8 @@
 # MDRS
 
+[![CI](https://img.shields.io/circleci/build/github/farhnkrnapratma/mdrs/main?label=CI)](https://app.circleci.com/pipelines/github/farhnkrnapratma/mdrs) [![npm](https://img.shields.io/npm/v/@mdrs/core?label=npm)](https://www.npmjs.com/package/@mdrs/core) [![crates.io](https://img.shields.io/crates/v/mdrs?label=crates.io)](https://crates.io/crates/mdrs) ![Language](https://img.shields.io/badge/language-Rust-orange?logo=rust) ![Tests](https://img.shields.io/badge/tests-cargo%20test-orange?logo=rust) ![License](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue)
+
+
 **MDRS (Markdown Rich Syntax)** is a superset of Markdown. It is meant as a drop-in replacement: any CommonMark or GitHub Flavored Markdown document should render the same way. On top of that it adds directives (`:::note`, `:::tabs`, `:::details`, `:::steps`, …), math, diagrams, charts, references and document variables (`:::define` with `${…}` interpolation).
 
 MDRS files use the `.mdrs` extension.
