@@ -10,7 +10,13 @@ repository = "https://github.com/farhnkrnapratma/mdrs"
 license = "MIT OR Apache-2.0"
 keywords = ["markdown", "commonmark", "gfm", "parser", "directives"]
 categories = ["parser-implementations", "text-processing"]
-include = ["/build.rs", "/src/**/*.rs", "/README.md", "/LICENSE-MIT", "/LICENSE-APACHE"]
+include = [
+  "/build.rs",
+  "/src/**/*.rs",
+  "/README.md",
+  "/LICENSE-MIT",
+  "/LICENSE-APACHE",
+]
 
 [lib]
 crate-type = ["cdylib", "rlib"]

@@ -2,7 +2,6 @@
 
 [![CircleCI](https://dl.circleci.com/status-badge/img/circleci/stZqvYiNAK17m5zy7ERCb/EGBRyRQ9CWeyLiSDGguM5Z/tree/main.svg?style=svg)](https://dl.circleci.com/status-badge/redirect/circleci/stZqvYiNAK17m5zy7ERCb/EGBRyRQ9CWeyLiSDGguM5Z/tree/main) [![npm](https://img.shields.io/npm/v/@mdrs/core?label=npm)](https://www.npmjs.com/package/@mdrs/core) [![crates.io](https://img.shields.io/crates/v/mdrs?label=crates.io)](https://crates.io/crates/mdrs) ![Language](https://img.shields.io/badge/language-Rust-orange?logo=rust) ![Tests](https://img.shields.io/badge/tests-cargo%20test-orange?logo=rust) ![License](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue)
 
-
 **MDRS (Markdown Rich Syntax)** is a superset of Markdown. It is meant as a drop-in replacement: any CommonMark or GitHub Flavored Markdown document should render the same way. On top of that it adds directives (`:::note`, `:::tabs`, `:::details`, `:::steps`, …), math, diagrams, charts, references and document variables (`:::define` with `${…}` interpolation).
 
 MDRS files use the `.mdrs` extension.
@@ -13,10 +12,10 @@ Alpha (`v1.0.0-alpha1`). The Rust renderer port is in progress. The original Typ
 
 The Rust crate supports CommonMark/GFM rendering, sanitization, selected block directives, JSON-backed `:::define` expressions and conditionals, server-side KaTeX math, diagram/chart/embed markers, references, extended task states, icons, and verbatim blocks. It is not a byte-for-byte parity port: asynchronous JavaScript resolver callbacks and browser-side Mermaid/chart execution remain runtime integrations rather than Rust implementations.
 
-| Registry | Name |
-| --- | --- |
-| crates.io | [`mdrs`](https://crates.io/crates/mdrs) |
-| npm | [`@mdrs/core`](https://www.npmjs.com/package/@mdrs/core) |
+| Registry  | Name                                                     |
+| --------- | -------------------------------------------------------- |
+| crates.io | [`mdrs`](https://crates.io/crates/mdrs)                  |
+| npm       | [`@mdrs/core`](https://www.npmjs.com/package/@mdrs/core) |
 
 The `napi` and `wasm` Cargo features expose `renderMarkdown`, `prepareMarkdownPage`, `resolveDefines` and `isMdrsPath`, plus `*WithData` variants that accept a JSON string for definitions, expressions and conditionals. Async JavaScript resolver callbacks are not exposed by the synchronous Rust ABI.
 
@@ -45,11 +44,11 @@ let html = mdrs::render_markdown("# Hello\n\nA **rich** document.")?;
 JavaScript / TypeScript:
 
 ```ts
-import { FILE_EXTENSION, isMdrsPath, renderMarkdown } from '@mdrs/core';
+import { FILE_EXTENSION, isMdrsPath, renderMarkdown } from "@mdrs/core";
 
 FILE_EXTENSION; // "mdrs"
-isMdrsPath('docs/intro.mdrs'); // true
-renderMarkdown('# Hello\n\nA **rich** document.');
+isMdrsPath("docs/intro.mdrs"); // true
+renderMarkdown("# Hello\n\nA **rich** document.");
 ```
 
 To render a `.mdrs` file to HTML, run the bundled example with the path of the file:

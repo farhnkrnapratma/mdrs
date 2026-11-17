@@ -7,33 +7,51 @@
  * flavor napi-rs can build is listed, because `NAPI_RS_NATIVE_LIBRARY_PATH`
  * can point the loader at a WASI artifact this package does not build itself.
  */
-export declare const __napiBindingTarget: 'native' | 'wasm32-wasi' | 'wasm32-wasip1'
+export declare const __napiBindingTarget:
+  "native" | "wasm32-wasi" | "wasm32-wasip1";
 
 export interface BindingHeadingItem {
-  id: string
-  text: string
-  level: number
+  id: string;
+  text: string;
+  level: number;
 }
 
 export interface BindingPreparedMarkdownPage {
-  html: string
-  headings: Array<BindingHeadingItem>
+  html: string;
+  headings: Array<BindingHeadingItem>;
 }
 
 export interface BindingRenderOptions {
-  internalOrigins?: Array<string>
+  internalOrigins?: Array<string>;
 }
 
-export declare function isMdrsPath(path: string): boolean
+export declare function isMdrsPath(path: string): boolean;
 
-export declare function prepareMarkdownPage(markdown: string, options?: BindingRenderOptions | undefined | null): BindingPreparedMarkdownPage
+export declare function prepareMarkdownPage(
+  markdown: string,
+  options?: BindingRenderOptions | undefined | null,
+): BindingPreparedMarkdownPage;
 
-export declare function prepareMarkdownPageWithData(markdown: string, dataJson: string, options?: BindingRenderOptions | undefined | null): BindingPreparedMarkdownPage
+export declare function prepareMarkdownPageWithData(
+  markdown: string,
+  dataJson: string,
+  options?: BindingRenderOptions | undefined | null,
+): BindingPreparedMarkdownPage;
 
-export declare function renderMarkdown(markdown: string, options?: BindingRenderOptions | undefined | null): string
+export declare function renderMarkdown(
+  markdown: string,
+  options?: BindingRenderOptions | undefined | null,
+): string;
 
-export declare function renderMarkdownWithData(markdown: string, dataJson: string, options?: BindingRenderOptions | undefined | null): string
+export declare function renderMarkdownWithData(
+  markdown: string,
+  dataJson: string,
+  options?: BindingRenderOptions | undefined | null,
+): string;
 
-export declare function resolveDefines(markdown: string): string
+export declare function resolveDefines(markdown: string): string;
 
-export declare function resolveDefinesWithData(markdown: string, dataJson: string): string
+export declare function resolveDefinesWithData(
+  markdown: string,
+  dataJson: string,
+): string;
