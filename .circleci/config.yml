@@ -15,7 +15,7 @@ commands:
       - run:
           name: Install bun
           command: |
-            curl -fsSL https://bun.sh/install | bash -s "bun-v1.4.4"
+            curl -fsSL https://bun.sh/install | bash -s "bun-v1.4.5"
             ln -sf "$HOME/.bun/bin/bun" "$HOME/.bun/bin/bunx"
             echo 'export PATH="$HOME/.bun/bin:$PATH"' >> "$BASH_ENV"
   setup-deny:
@@ -190,7 +190,7 @@ jobs:
           name: Install rust and bun
           command: |
             curl -fsSL https://sh.rustup.rs | sh -s -- -y --profile minimal
-            curl -fsSL https://bun.sh/install | bash -s "bun-v1.4.4"
+            curl -fsSL https://bun.sh/install | bash -s "bun-v1.4.5"
             ln -sf "$HOME/.bun/bin/bun" "$HOME/.bun/bin/bunx"
             echo 'export PATH="$HOME/.cargo/bin:$HOME/.bun/bin:$PATH"' >> "$BASH_ENV"
       - run: bun install --frozen-lockfile
@@ -217,7 +217,7 @@ jobs:
           command: |
             Invoke-WebRequest https://win.rustup.rs/x86_64 -OutFile rustup-init.exe
             ./rustup-init.exe -y --profile minimal
-            npm install --global bun@1.4.4
+            npm install --global bun@1.4.5
       - run:
           name: Build bindings
           command: |
