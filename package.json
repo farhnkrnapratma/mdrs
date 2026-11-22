@@ -1,6 +1,6 @@
 {
   "name": "@mdrs/core",
-  "version": "1.0.0-alpha1",
+  "version": "1.0.0-alpha2",
   "description": "Renderer for MDRS (Markdown Rich Syntax), a superset of Markdown with callouts, tabs, math, diagrams and variables. Native addon for Node.js and Bun.",
   "license": "MIT OR Apache-2.0",
   "author": "Farhan Kurnia Pratama <farhnkrnapratma@gmail.com>",
