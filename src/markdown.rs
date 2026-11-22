@@ -300,6 +300,7 @@ pub(crate) fn resolve_conditionals(
     source: &str,
     scope: &crate::define::Scope,
     data: &Value,
+    inline: bool,
 ) -> Result<String, RenderError> {
     let lines: Vec<&str> = source.lines().collect();
     let has_block = lines.iter().any(|line| {
@@ -376,7 +377,7 @@ pub(crate) fn resolve_conditionals(
     if source.ends_with('\n') {
         rendered.push('\n');
     }
-    if rendered.contains("${if ") {
+    if inline && rendered.contains("${if ") {
         rendered = resolve_inline_conditionals(&rendered, scope, data);
     }
     Ok(rendered)
@@ -1025,28 +1026,32 @@ mod tests {
         let data = serde_json::json!({"flag": true});
         let source = ":::if flag\nyes\n:::else\nno\n:::endif\n";
         assert_eq!(
-            resolve_conditionals(source, &scope(), &data).unwrap(),
+            resolve_conditionals(source, &scope(), &data, true).unwrap(),
             "yes\n"
         );
         let source = ":::if !flag\nyes\n:::else\nno\n:::endif";
-        assert_eq!(resolve_conditionals(source, &scope(), &data).unwrap(), "no");
+        assert_eq!(
+            resolve_conditionals(source, &scope(), &data, true).unwrap(),
+            "no"
+        );
         let source = ":::if !flag\nyes\n:::endif\nafter";
         assert_eq!(
-            resolve_conditionals(source, &scope(), &data).unwrap(),
+            resolve_conditionals(source, &scope(), &data, true).unwrap(),
             "\nafter".trim_start_matches('\n')
         );
         let source =
             ":::if flag\nouter\n:::if !flag\ninner\n:::else\nelse-inner\n:::endif\n:::endif";
         assert_eq!(
-            resolve_conditionals(source, &scope(), &data).unwrap(),
+            resolve_conditionals(source, &scope(), &data, true).unwrap(),
             "outer\n:::if !flag\ninner\n:::else\nelse-inner\n:::endif"
         );
-        assert!(resolve_conditionals(":::if flag\nopen", &scope(), &data).is_err());
+        assert!(resolve_conditionals(":::if flag\nopen", &scope(), &data, true).is_err());
         assert_eq!(
             resolve_conditionals(
                 ":::if flag\nyes\n:::endif\n:::else\n:::endif\nz",
                 &scope(),
-                &data
+                &data,
+                true
             )
             .unwrap(),
             "yes\nz"
@@ -1057,19 +1062,19 @@ mod tests {
     fn resolves_inline_conditionals() {
         let data = serde_json::json!({"flag": true});
         assert_eq!(
-            resolve_conditionals("a ${if flag}b${else}c${endif} d", &scope(), &data).unwrap(),
+            resolve_conditionals("a ${if flag}b${else}c${endif} d", &scope(), &data, true).unwrap(),
             "a b d"
         );
         assert_eq!(
-            resolve_conditionals("a ${if !flag}b${endif} d", &scope(), &data).unwrap(),
+            resolve_conditionals("a ${if !flag}b${endif} d", &scope(), &data, true).unwrap(),
             "a  d"
         );
         assert_eq!(
-            resolve_conditionals("a ${if flag", &scope(), &data).unwrap(),
+            resolve_conditionals("a ${if flag", &scope(), &data, true).unwrap(),
             "a ${if flag"
         );
         assert_eq!(
-            resolve_conditionals("a ${if flag}b", &scope(), &data).unwrap(),
+            resolve_conditionals("a ${if flag}b", &scope(), &data, true).unwrap(),
             "a ${if flag}b"
         );
     }
