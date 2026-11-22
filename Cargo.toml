@@ -5,7 +5,6 @@ authors = ["Farhan Kurnia Pratama <farhnkrnapratma@gmail.com>"]
 edition = "2024"
 description = "Renderer for MDRS (Markdown Rich Syntax), a superset of Markdown with callouts, tabs, math, diagrams and variables"
 readme = "README.md"
-homepage = "https://github.com/farhnkrnapratma/mdrs"
 documentation = "https://docs.rs/mdrs"
 repository = "https://github.com/farhnkrnapratma/mdrs"
 license = "MIT OR Apache-2.0"

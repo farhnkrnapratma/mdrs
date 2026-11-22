@@ -105,7 +105,7 @@ pub fn render_markdown_with_options(
 ) -> Result<String, RenderError> {
     check_document_size(markdown)?;
     let resolved = markdown::ResolvedOptions::new(options);
-    let source = markdown::resolve_defines(&markdown::prepare_source(markdown))?;
+    let source = resolve_without_data(markdown)?;
     check_rendered_output_size(&source)?;
     let html = markdown::render(&source, &resolved);
     check_rendered_output_size(&html)?;
@@ -130,7 +130,7 @@ pub fn render_markdown_with_data(
     check_document_size(markdown)?;
     let resolved = markdown::ResolvedOptions::new(options);
     let (source, scope) = define::resolve_with_scope(&markdown::prepare_source(markdown), data)?;
-    let source = markdown::resolve_conditionals(&source, &scope, data)?;
+    let source = markdown::resolve_conditionals(&source, &scope, data, true)?;
     check_rendered_output_size(&source)?;
     let html = markdown::render(&source, &resolved);
     check_rendered_output_size(&html)?;
@@ -170,9 +170,19 @@ pub fn prepare_markdown_page_with_data(
 /// Resolves simple scalar variables in a `:::define` block without external data.
 pub fn resolve_defines(markdown: &str) -> Result<String, RenderError> {
     check_document_size(markdown)?;
-    let resolved = markdown::resolve_defines(&markdown::prepare_source(markdown))?;
+    let resolved = resolve_without_data(markdown)?;
     check_rendered_output_size(&resolved)?;
     Ok(resolved)
+}
+
+fn resolve_without_data(markdown: &str) -> Result<String, RenderError> {
+    let source = markdown::prepare_source(markdown);
+    let data = serde_json::Value::Object(serde_json::Map::new());
+    let scope = define::lenient_scope(&source, &data);
+    let inline = scope.is_some();
+    let source =
+        markdown::resolve_conditionals(&source, &scope.unwrap_or_default(), &data, inline)?;
+    markdown::resolve_defines(&source)
 }
 
 /// Resolves definitions and expressions against a JSON data object.
@@ -464,6 +474,29 @@ ${literal}
         assert_eq!(
             RenderError::InvalidData("bad".to_owned()).to_string(),
             "Invalid MDRS data: bad"
+        );
+    }
+
+    #[test]
+    fn evaluates_conditionals_without_data_like_the_typescript_engine() {
+        assert_eq!(
+            resolve_defines(":::define\n:::\na ${if true}b${endif} d").unwrap(),
+            "a ${if true}b${endif} d"
+        );
+        assert_eq!(
+            render_markdown(":::if true\nYes\n:::endif\n").unwrap(),
+            "<p>Yes</p>\n"
+        );
+        let source =
+            ":::define\nstable: false\n:::\n\n:::if !stable\nPreview\n:::else\nStable\n:::endif\n";
+        assert_eq!(render_markdown(source).unwrap(), "<p>Preview</p>\n");
+        assert_eq!(
+            resolve_defines(":::define\nflag: true\n:::\na ${if flag}b${else}c${endif} d").unwrap(),
+            "a b d"
+        );
+        assert_eq!(
+            resolve_defines("a ${if true}b${endif} d").unwrap(),
+            "a ${if true}b${endif} d"
         );
     }
 

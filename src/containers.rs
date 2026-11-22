@@ -238,6 +238,11 @@ fn render_tabs(
             return (format_tabs(name, attributes, &tabs, options), true);
         }
 
+        if current.is_some() && line.trim() == "::" {
+            tabs.extend(current.take());
+            continue;
+        }
+
         if let Some(source) = line.trim().strip_prefix("::tab")
             && source
                 .chars()
@@ -520,6 +525,17 @@ mod tests {
         assert!(output.contains("mdrs-snippets-actions"));
         assert!(output.contains("hidden"));
         assert!(!output.contains("data-mdrs-tab-label=\"fake\""));
+    }
+
+    #[test]
+    fn closes_tabs_with_a_bare_double_colon() {
+        let html = render(
+            ":::tabs\n::tab label=\"npm\"\nnpm i\n::\n::tab label=\"bun\"\nbun add\n::\n:::",
+            &default_opts(),
+        );
+        assert!(!html.contains("::"));
+        assert!(html.contains("npm i"));
+        assert!(html.contains("bun add"));
     }
 
     #[test]

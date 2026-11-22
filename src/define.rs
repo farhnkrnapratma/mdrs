@@ -598,6 +598,35 @@ pub(crate) fn resolve(source: &str, data: &Value) -> Result<String, RenderError>
     resolve_with_scope(source, data).map(|(rendered, _)| rendered)
 }
 
+pub(crate) fn lenient_scope(source: &str, data: &Value) -> Option<Scope> {
+    let mut lines = source.lines().skip_while(|line| line.trim() != ":::define");
+    lines.next()?;
+    let mut pending: Vec<(String, String)> = lines
+        .take_while(|line| line.trim() != ":::")
+        .filter_map(|line| line.split_once(':'))
+        .map(|(name, expression)| (name.trim().to_owned(), expression.trim().to_owned()))
+        .collect();
+    if pending.is_empty() {
+        return None;
+    }
+    let mut scope = Scope::new();
+    loop {
+        let before = pending.len();
+        pending.retain(
+            |(name, expression)| match eval(expression, &scope, data, true) {
+                Ok(value) => {
+                    scope.insert(name.clone(), value);
+                    false
+                }
+                Err(_) => true,
+            },
+        );
+        if pending.is_empty() || pending.len() == before {
+            return Some(scope);
+        }
+    }
+}
+
 pub(crate) fn resolve_with_scope(
     source: &str,
     data: &Value,

@@ -60,7 +60,7 @@ renderMarkdownWithData("Hello ${name}!", JSON.stringify({ name: "Ada" }));
 | `renderMarkdown(source, options?)`                                                | HTML                                                                                                       |
 | `prepareMarkdownPage(source, options?)`                                           | `{ html, headings }`                                                                                       |
 | `resolveDefines(source)`                                                          | The source with `:::define` variables substituted                                                          |
-| `renderMarkdownWithData`, `prepareMarkdownPageWithData`, `resolveDefinesWithData` | The same, with a JSON string of values that expressions can read, and with `:::if` and `${if}` conditionals evaluated |
+| `renderMarkdownWithData`, `prepareMarkdownPageWithData`, `resolveDefinesWithData` | The same, with a JSON string of values that expressions can read                                           |
 | `isMdrsPath(path)`, `FILE_EXTENSION`                                              | Whether a path ends in `.mdrs`, and the extension itself                                                   |
 
 `internalOrigins` lists origins whose links open in the same tab; other links get `target="_blank"`. Invalid definitions and expressions, such as a variable a `:::define` block does not declare, throw an error that names the problem.
@@ -84,7 +84,6 @@ The HTML is sanitized: raw HTML is reduced to a safe subset, event handlers are 
 
 The Rust renderer is a port of the TypeScript engine described in the syntax guide and does not match it byte for byte yet. Known gaps:
 
-- `:::if` blocks and `${if}` are evaluated only by the `*WithData` functions.
 - GitHub alert blockquotes (`> [!NOTE]`) render as plain blockquotes; use `:::note` and the other callout directives.
 - Live data (`get(url, path)`) and other asynchronous resolvers are not available, because the bindings are synchronous.
 
