@@ -150,7 +150,7 @@ jobs:
               bunx --bun --no-install commitlint --from "$(git merge-base origin/main HEAD)" --to HEAD
             fi
 
-  # Everything below runs on version tags only (see the release workflow).
+  # The builds below run on release branches and version tags; publish runs on version tags only.
   build-linux:
     parameters:
       target:
@@ -232,7 +232,7 @@ jobs:
           command: |
             $env:PATH = "$env:USERPROFILE\.cargo\bin;$env:PATH"
             bun install --frozen-lockfile
-            foreach ($target in 'x86_64-pc-windows-msvc', 'aarch64-pc-windows-msvc') {
+            foreach ($target in 'x86_64-pc-windows-msvc', 'aarch64-pc-windows-msvc', 'i686-pc-windows-msvc') {
               rustup target add $target
               bun run build:release --target $target
               New-Item -ItemType Directory -Force "artifacts/bindings-$target" | Out-Null
@@ -283,15 +283,19 @@ workflows:
                 - aarch64-unknown-linux-gnu
                 - x86_64-unknown-linux-musl
                 - aarch64-unknown-linux-musl
-          filters: &tags-only
+                - armv7-unknown-linux-gnueabihf
+                - powerpc64le-unknown-linux-gnu
+                - s390x-unknown-linux-gnu
+                - riscv64gc-unknown-linux-gnu
+          filters: &release-builds
             tags:
               only: /^v.*/
             branches:
-              ignore: /.*/
+              only: /^release\/.*/
       - build-macos:
-          filters: *tags-only
+          filters: *release-builds
       - build-windows:
-          filters: *tags-only
+          filters: *release-builds
       - publish:
           context: npm-publish
           requires:
@@ -299,6 +303,14 @@ workflows:
             - build-aarch64-unknown-linux-gnu
             - build-x86_64-unknown-linux-musl
             - build-aarch64-unknown-linux-musl
+            - build-armv7-unknown-linux-gnueabihf
+            - build-powerpc64le-unknown-linux-gnu
+            - build-s390x-unknown-linux-gnu
+            - build-riscv64gc-unknown-linux-gnu
             - build-macos
             - build-windows
-          filters: *tags-only
+          filters:
+            tags:
+              only: /^v.*/
+            branches:
+              ignore: /.*/
