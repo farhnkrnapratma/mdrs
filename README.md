@@ -37,7 +37,13 @@ npm install @mdrs/core@alpha   # or: bun add @mdrs/core@alpha
 cargo add mdrs                 # Rust
 ```
 
-The npm package ships prebuilt native addons for Linux (x64 and arm64, glibc and musl), macOS (x64 and arm64) and Windows (x64 and arm64), so nothing is compiled on install.
+The npm package ships prebuilt native addons as optional dependencies, so nothing is compiled on install:
+
+| OS      | Architectures                                                   |
+| ------- | --------------------------------------------------------------- |
+| Linux   | x64 and arm64 (glibc and musl), armv7, ppc64le, s390x, riscv64 |
+| macOS   | arm64, x64                                                      |
+| Windows | x64, arm64, ia32                                                |
 
 ## Usage
 
