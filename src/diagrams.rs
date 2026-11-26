@@ -41,6 +41,90 @@ fn svg(source: &str, index: usize) -> Option<String> {
     pelers::render_with(&model, &options)
         .ok()
         .map(|rendered| rendered.svg)
+        .filter(|svg| is_safe(svg))
+}
+
+const SVG_TAGS: [&str; 20] = [
+    "svg",
+    "g",
+    "text",
+    "tspan",
+    "path",
+    "rect",
+    "circle",
+    "ellipse",
+    "line",
+    "polyline",
+    "polygon",
+    "title",
+    "desc",
+    "a",
+    "image",
+    "defs",
+    "marker",
+    "lineargradient",
+    "stop",
+    "clippath",
+];
+
+fn is_safe(svg: &str) -> bool {
+    let mut rest = svg;
+    while let Some(open) = rest.find('<') {
+        let Some(close) = rest[open..].find('>') else {
+            return false;
+        };
+        let tag = attribute_text(&rest[open + 1..open + close]);
+        let name = tag
+            .trim_start_matches('/')
+            .split(|c: char| c.is_whitespace() || c == '/')
+            .next()
+            .unwrap_or_default();
+        if !SVG_TAGS.contains(&name) || has_event_handler(&tag) || has_unsafe_scheme(&tag) {
+            return false;
+        }
+        rest = &rest[open + close + 1..];
+    }
+    true
+}
+
+fn attribute_text(tag: &str) -> String {
+    let mut text = String::with_capacity(tag.len());
+    let mut rest = tag;
+    while let Some(start) = rest.find("&#") {
+        text.push_str(&rest[..start]);
+        let entity = &rest[start + 2..];
+        let end = entity.find(';').unwrap_or(entity.len());
+        let code = match entity[..end].strip_prefix(['x', 'X']) {
+            Some(hex) => u32::from_str_radix(hex, 16).ok(),
+            None => entity[..end].parse().ok(),
+        };
+        text.extend(code.and_then(char::from_u32));
+        rest = &entity[(end + 1).min(entity.len())..];
+    }
+    text.push_str(rest);
+    text.replace("&colon;", ":").to_ascii_lowercase()
+}
+
+fn has_event_handler(tag: &str) -> bool {
+    tag.match_indices("on").any(|(at, _)| {
+        let after = &tag[at + 2..];
+        let name_end = after
+            .find(|c: char| !c.is_ascii_alphabetic())
+            .unwrap_or(after.len());
+        tag[..at].ends_with(|c: char| c.is_whitespace() || c == '"' || c == '\'' || c == '/')
+            && name_end > 0
+            && after[name_end..].trim_start().starts_with('=')
+    })
+}
+
+fn has_unsafe_scheme(tag: &str) -> bool {
+    let compact: String = tag
+        .chars()
+        .filter(|c| !c.is_whitespace() && !c.is_control())
+        .collect();
+    ["javascript:", "vbscript:", "data:text", "data:image/svg"]
+        .iter()
+        .any(|scheme| compact.contains(scheme))
 }
 
 fn decode(encoded: &str) -> String {
@@ -101,6 +185,38 @@ mod tests {
         let html = placeholder("flowchart%20LR%0AA--%3EB");
         assert_eq!(draw(&html, Diagrams::Placeholder), html);
         assert_eq!(draw("<p>x</p>", Diagrams::Pelers), "<p>x</p>");
+    }
+
+    #[test]
+    fn rejects_svg_that_could_run_script() {
+        assert!(is_safe(
+            "<svg class=\"pelers\"><g><text>&lt;script&gt; onclick=x javascript:</text></g><a href=\"https://x\"><title>t</title></a></svg>"
+        ));
+        for svg in [
+            "<svg><script>alert(1)</script></svg>",
+            "<svg><foreignObject></foreignObject></svg>",
+            "<svg><g onclick=\"x\"></g></svg>",
+            "<svg><g\tONLOAD = 'x'></g></svg>",
+            "<svg><g x=\"1\"/onload=x></g></svg>",
+            "<svg><a href=\"&#106;ava&#x73;cript&colon;x\">y</a></svg>",
+            "<svg><a href=\" java\tscript:x\">y</a></svg>",
+            "<svg><image href=\"data:image/svg+xml;base64,x\"/></svg>",
+            "<svg><g",
+        ] {
+            assert!(!is_safe(svg), "{svg}");
+        }
+        assert!(is_safe(
+            "<svg><g data-x=\"&#;&#xZZ\" font=\"one onward\"></g></svg>"
+        ));
+    }
+
+    #[test]
+    fn draws_labels_that_only_look_like_script() {
+        let source = "flowchart%20LR%0A%20%20A%5B%22javascript%3Aalert(1)%22%5D%20--%3E%20B%0A";
+        let html = placeholder(source);
+        let output = draw(&html, Diagrams::Pelers);
+        assert!(output.contains("mdrs-mermaid--static"));
+        assert!(output.contains("javascript:alert(1)"));
     }
 
     #[test]
