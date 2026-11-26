@@ -11,6 +11,17 @@ use crate::{
 #[napi(object)]
 pub struct BindingRenderOptions {
     pub internal_origins: Option<Vec<String>>,
+    #[napi(ts_type = "'pelers' | 'placeholder'")]
+    pub diagrams: Option<String>,
+}
+
+impl BindingRenderOptions {
+    fn into_options(self) -> Result<RenderOptions> {
+        Ok(RenderOptions {
+            diagrams: super::diagrams(self.diagrams.as_deref()).map_err(Error::from_reason)?,
+            internal_origins: self.internal_origins.unwrap_or_default(),
+        })
+    }
 }
 
 #[derive(Clone)]
@@ -53,9 +64,7 @@ impl From<PreparedMarkdownPage> for BindingPreparedMarkdownPage {
 #[cfg_attr(test, allow(dead_code))]
 pub fn render(markdown: String, options: Option<BindingRenderOptions>) -> Result<String> {
     let options = options.unwrap_or_default();
-    let render_options = RenderOptions {
-        internal_origins: options.internal_origins.unwrap_or_default(),
-    };
+    let render_options = options.into_options()?;
     render_markdown_with_options(&markdown, &render_options)
         .map_err(|error| Error::from_reason(error.to_string()))
 }
@@ -68,9 +77,7 @@ pub fn render_with_data(
     options: Option<BindingRenderOptions>,
 ) -> Result<String> {
     let options = options.unwrap_or_default();
-    let render_options = RenderOptions {
-        internal_origins: options.internal_origins.unwrap_or_default(),
-    };
+    let render_options = options.into_options()?;
     let data = serde_json::from_str(&data_json)
         .map_err(|error| Error::from_reason(format!("Invalid MDRS data: {error}")))?;
     crate::render_markdown_with_data(&markdown, &data, &render_options)
@@ -90,9 +97,7 @@ pub fn prepare_page(
     options: Option<BindingRenderOptions>,
 ) -> Result<BindingPreparedMarkdownPage> {
     let options = options.unwrap_or_default();
-    let render_options = RenderOptions {
-        internal_origins: options.internal_origins.unwrap_or_default(),
-    };
+    let render_options = options.into_options()?;
     prepare_markdown_page(&markdown, &render_options)
         .map(Into::into)
         .map_err(|error| Error::from_reason(error.to_string()))
@@ -106,9 +111,7 @@ pub fn prepare_page_with_data(
     options: Option<BindingRenderOptions>,
 ) -> Result<BindingPreparedMarkdownPage> {
     let options = options.unwrap_or_default();
-    let render_options = RenderOptions {
-        internal_origins: options.internal_origins.unwrap_or_default(),
-    };
+    let render_options = options.into_options()?;
     let data = serde_json::from_str(&data_json)
         .map_err(|error| Error::from_reason(format!("Invalid MDRS data: {error}")))?;
     crate::prepare_markdown_page_with_data(&markdown, &data, &render_options)

@@ -27,6 +27,7 @@ fn main() {
         &data,
         &mdrs::RenderOptions {
             internal_origins: vec!["https://my-site.example".to_owned()],
+            diagrams: mdrs::Diagrams::Placeholder,
         },
     )
     .expect("render showcase");

@@ -30,6 +30,7 @@ ammonia = "4.2.4"
 katex-rs = "0.3.0"
 napi = { version = "3", optional = true }
 napi-derive = { version = "3", optional = true }
+pelers = "1.0.0-alpha4"
 pulldown-cmark = "0.13.6"
 serde = { version = "1.0.229", features = ["derive"], optional = true }
 serde-wasm-bindgen = { version = "0.6.5", optional = true }

@@ -6,6 +6,8 @@ export declare function isMdrsPath(path: string): boolean;
 
 export interface RenderOptions {
   internalOrigins?: string[];
+  /** `pelers` (the default) draws Mermaid diagrams to inline SVG; `placeholder` leaves them for a browser-side renderer. */
+  diagrams?: "pelers" | "placeholder";
 }
 
 export interface HeadingItem {

@@ -6,6 +6,7 @@ use std::path::Path;
 
 mod containers;
 mod define;
+mod diagrams;
 mod markdown;
 mod sanitize;
 
@@ -33,6 +34,18 @@ pub struct RenderOptions {
     /// ignored. `"https://example.com/docs"` and `"https://example.com/other"`
     /// both match any link whose origin is `https://example.com`.
     pub internal_origins: Vec<String>,
+    /// How Mermaid diagrams are emitted. They are drawn to SVG by default.
+    pub diagrams: Diagrams,
+}
+
+/// How the renderer emits Mermaid diagrams.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Diagrams {
+    /// Draw each diagram to inline SVG with pelers. A diagram pelers cannot draw keeps its placeholder.
+    #[default]
+    Pelers,
+    /// Emit a placeholder carrying the diagram source, for a browser-side renderer.
+    Placeholder,
 }
 
 /// A rendered heading exposed to document navigation.
@@ -103,6 +116,10 @@ pub fn render_markdown_with_options(
     markdown: &str,
     options: &RenderOptions,
 ) -> Result<String, RenderError> {
+    finish(html_with_options(markdown, options)?, options)
+}
+
+fn html_with_options(markdown: &str, options: &RenderOptions) -> Result<String, RenderError> {
     check_document_size(markdown)?;
     let resolved = markdown::ResolvedOptions::new(options);
     let source = resolve_without_data(markdown)?;
@@ -127,6 +144,14 @@ pub fn render_markdown_with_data(
     data: &serde_json::Value,
     options: &RenderOptions,
 ) -> Result<String, RenderError> {
+    finish(html_with_data(markdown, data, options)?, options)
+}
+
+fn html_with_data(
+    markdown: &str,
+    data: &serde_json::Value,
+    options: &RenderOptions,
+) -> Result<String, RenderError> {
     check_document_size(markdown)?;
     let resolved = markdown::ResolvedOptions::new(options);
     let (source, scope) = define::resolve_with_scope(&markdown::prepare_source(markdown), data)?;
@@ -147,11 +172,7 @@ pub fn prepare_markdown_page(
     markdown: &str,
     options: &RenderOptions,
 ) -> Result<PreparedMarkdownPage, RenderError> {
-    let html = render_markdown_with_options(markdown, options)?;
-    let html = headings::inject_heading_ids(&html);
-    let html = headings::prefix_hash_links(&html);
-    let headings = headings::extract_headings(&html);
-    Ok(PreparedMarkdownPage { html, headings })
+    page(html_with_options(markdown, options)?, options)
 }
 
 /// Renders a page with JSON-backed definitions and heading navigation.
@@ -160,11 +181,21 @@ pub fn prepare_markdown_page_with_data(
     data: &serde_json::Value,
     options: &RenderOptions,
 ) -> Result<PreparedMarkdownPage, RenderError> {
-    let html = render_markdown_with_data(markdown, data, options)?;
+    page(html_with_data(markdown, data, options)?, options)
+}
+
+fn page(html: String, options: &RenderOptions) -> Result<PreparedMarkdownPage, RenderError> {
     let html = headings::inject_heading_ids(&html);
     let html = headings::prefix_hash_links(&html);
     let headings = headings::extract_headings(&html);
+    let html = finish(html, options)?;
     Ok(PreparedMarkdownPage { html, headings })
+}
+
+fn finish(html: String, options: &RenderOptions) -> Result<String, RenderError> {
+    let html = diagrams::draw(&html, options.diagrams);
+    check_rendered_output_size(&html)?;
+    Ok(html)
 }
 
 /// Resolves simple scalar variables in a `:::define` block without external data.
@@ -417,9 +448,36 @@ ${literal}
     }
 
     #[test]
+    fn draws_mermaid_with_pelers_unless_asked_for_placeholders() {
+        let source = "## Flow\n\n```mermaid\nflowchart LR\n  A[Start] --> B\n```\n";
+        let html = render_markdown(source).unwrap();
+        assert!(html.contains("mdrs-mermaid--static"), "{html}");
+        assert!(html.contains("<svg"));
+        let page = prepare_markdown_page(source, &RenderOptions::default()).unwrap();
+        assert!(page.html.contains("<svg"));
+        assert_eq!(page.headings.len(), 1);
+        let data = serde_json::json!({});
+        assert!(
+            render_markdown_with_data(source, &data, &RenderOptions::default())
+                .unwrap()
+                .contains("<svg")
+        );
+        let placeholders = RenderOptions {
+            diagrams: Diagrams::Placeholder,
+            ..RenderOptions::default()
+        };
+        let html = render_markdown_with_options(source, &placeholders).unwrap();
+        assert!(html.contains("Rendering diagram"));
+        assert!(!html.contains("<svg"));
+        let page = prepare_markdown_page_with_data(source, &data, &placeholders).unwrap();
+        assert!(!page.html.contains("<svg"));
+    }
+
+    #[test]
     fn marks_external_links_but_not_internal_origins() {
         let options = RenderOptions {
             internal_origins: vec!["https://internal.example/docs".to_owned()],
+            ..RenderOptions::default()
         };
         let html = render_markdown_with_options(
             "[external](https://outside.example/page) [internal](https://internal.example/page)",

@@ -1151,6 +1151,7 @@ mod tests {
     fn decorates_links_in_every_shape() {
         let options = ResolvedOptions::new(&RenderOptions {
             internal_origins: vec!["https://own.test".to_owned(), "not a url".to_owned()],
+            ..RenderOptions::default()
         });
         let html = "<a href=\"https://x.test/?a=1&amp;b=2\" class=\"c\">x</a>\
 <a href=\"https://x.test/\" class=\"mdrs-external-link\" target=\"_self\" rel=\"me\">y</a>\
