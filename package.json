@@ -1,7 +1,7 @@
 {
   "name": "@mdrs/core",
   "version": "1.0.0-alpha3",
-  "description": "Renderer for MDRS (Markdown Rich Syntax), a superset of Markdown with callouts, tabs, math, diagrams and variables. Native addon for Node.js and Bun.",
+  "description": "Renderer for MDRS (Markdown Rich Syntax), a superset of Markdown with callouts, tabs, math, diagrams and variables. Native addon for Node.js and Bun, WebAssembly for browsers.",
   "license": "MIT OR Apache-2.0",
   "author": "Farhan Kurnia Pratama <farhnkrnapratma@gmail.com>",
   "repository": {
@@ -18,14 +18,30 @@
   "exports": {
     ".": {
       "types": "./index.d.ts",
+      "browser": "./browser.js",
       "default": "./index.js"
-    }
+    },
+    "./lazy": {
+      "types": "./lazy.d.ts",
+      "default": "./lazy.js"
+    },
+    "./wasm": "./wasm/mdrs_bg.wasm",
+    "./package.json": "./package.json"
   },
   "files": [
     "index.js",
     "index.native.js",
     "index.d.ts",
     "index.native.d.ts",
+    "path.js",
+    "browser.js",
+    "lazy.js",
+    "lazy.d.ts",
+    "wasm/mdrs.js",
+    "wasm/mdrs.d.ts",
+    "wasm/mdrs_bg.wasm",
+    "wasm/mdrs_bg.wasm.d.ts",
+    "wasm/package.json",
     "README.md",
     "LICENSE-MIT",
     "LICENSE-APACHE"
@@ -43,8 +59,10 @@
     "prepare": "bash .githooks/install.sh",
     "build": "napi build --platform --features napi --esm --js index.native.js --dts index.native.d.ts",
     "build:release": "napi build --platform --release --features napi --esm --js index.native.js --dts index.native.d.ts",
+    "build:wasm": "node scripts/build-wasm.mjs",
     "test:bindings": "bun scripts/test-bindings.mjs",
-    "test:native": "bun run build:release && bun run test:bindings"
+    "test:native": "bun run build:release && bun run test:bindings",
+    "test:wasm": "node scripts/test-wasm.mjs"
   },
   "napi": {
     "binaryName": "mdrs",

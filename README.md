@@ -2,7 +2,7 @@
 
 [![CircleCI](https://dl.circleci.com/status-badge/img/circleci/stZqvYiNAK17m5zy7ERCb/EGBRyRQ9CWeyLiSDGguM5Z/tree/main.svg?style=svg)](https://dl.circleci.com/status-badge/redirect/circleci/stZqvYiNAK17m5zy7ERCb/EGBRyRQ9CWeyLiSDGguM5Z/tree/main) [![codecov](https://codecov.io/gh/farhnkrnapratma/mdrs/graph/badge.svg)](https://codecov.io/gh/farhnkrnapratma/mdrs) [![npm](https://img.shields.io/npm/v/@mdrs/core?label=npm)](https://www.npmjs.com/package/@mdrs/core) [![crates.io](https://img.shields.io/crates/v/mdrs?label=crates.io)](https://crates.io/crates/mdrs) [![docs.rs](https://img.shields.io/docsrs/mdrs)](https://docs.rs/mdrs) ![License](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue)
 
-**MDRS (Markdown Rich Syntax)** is a superset of Markdown. A CommonMark or GitHub Flavored Markdown document renders as it would anywhere else, and MDRS adds callouts, collapsible sections, steps, tabs, math, diagrams, extended task lists and document variables on top. This repository is the MDRS renderer: it turns MDRS into sanitized HTML, is written in Rust and is available as a crate and as an npm package for Node.js and Bun.
+**MDRS (Markdown Rich Syntax)** is a superset of Markdown. A CommonMark or GitHub Flavored Markdown document renders as it would anywhere else, and MDRS adds callouts, collapsible sections, steps, tabs, math, diagrams, extended task lists and document variables on top. This repository is the MDRS renderer: it turns MDRS into sanitized HTML, is written in Rust and is available as a crate, as an npm package for Node.js and Bun, and as WebAssembly for browsers.
 
 MDRS files use the `.mdrs` extension.
 
@@ -24,7 +24,7 @@ Directives open with `:::name` and close with a bare `:::`.
 :::
 
 :::details summary="What is rendered on the server?"
-Everything except diagrams and charts, including math: $$ e^{i\pi} + 1 = 0 $$
+Everything except charts, including math and Mermaid diagrams: $$ e^{i\pi} + 1 = 0 $$
 :::
 ```
 
@@ -69,7 +69,20 @@ renderMarkdownWithData("Hello ${name}!", JSON.stringify({ name: "Ada" }));
 | `renderMarkdownWithData`, `prepareMarkdownPageWithData`, `resolveDefinesWithData` | The same, with a JSON string of values that expressions can read                                           |
 | `isMdrsPath(path)`, `FILE_EXTENSION`                                              | Whether a path ends in `.mdrs`, and the extension itself                                                   |
 
-`internalOrigins` lists origins whose links open in the same tab; other links get `target="_blank"`. Invalid definitions and expressions, such as a variable a `:::define` block does not declare, throw an error that names the problem.
+`internalOrigins` lists origins whose links open in the same tab; other links get `target="_blank"`. `diagrams` is `"pelers"` (the default) to draw Mermaid diagrams to inline SVG, or `"placeholder"` to leave them for a browser-side renderer. Invalid definitions and expressions, such as a variable a `:::define` block does not declare, throw an error that names the problem.
+
+### Browsers
+
+Bundlers pick the WebAssembly build through the package's `browser` export, which loads the module before your code runs. To load it on demand, import from `@mdrs/core/lazy` and call `load()` first:
+
+```ts
+import { load, renderMarkdown } from "@mdrs/core/lazy";
+
+await load(); // or load(source): a URL, a Response, the bytes or a compiled WebAssembly.Module
+renderMarkdown("# Hello");
+```
+
+The module file itself is exported as `@mdrs/core/wasm`, for runtimes such as Cloudflare Workers that need to import it as a module.
 
 ### Rust
 
@@ -84,7 +97,7 @@ The Rust API mirrors the JavaScript one with snake_case names. Documents are lim
 
 ## Output
 
-The HTML is sanitized: raw HTML is reduced to a safe subset, event handlers are stripped and unsafe URLs are removed. Generated classes start with `mdrs-`. Math is typeset to KaTeX HTML on the server. Mermaid diagrams and charts are emitted as placeholders that carry their source, for a browser-side script to render.
+The HTML is sanitized: raw HTML is reduced to a safe subset, event handlers are stripped and unsafe URLs are removed. Generated classes start with `mdrs-`. Math is typeset to KaTeX HTML. Mermaid diagrams are drawn to inline SVG by [pelers](https://github.com/farhnkrnapratma/pelers), themeable through its `--pelers-*` CSS variables; a diagram pelers cannot draw, and every diagram when `diagrams` is `"placeholder"`, is emitted as a placeholder that carries its source. Charts are always placeholders for a browser-side script.
 
 ## Limitations
 
